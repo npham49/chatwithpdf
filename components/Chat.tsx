@@ -1,15 +1,20 @@
-import { type NextPage } from 'next';
-import Head from 'next/head';
+"use client";
+
 import { Document, Page } from 'react-pdf';
-import 'react-pdf/dist/esm/Page/TextLayer.css';
 import { Button, Card, UploadProps } from 'antd';
 import { message, Upload } from 'antd';
 import { type TextItem } from 'pdfjs-dist/types/src/display/api';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import ChatWindow from '../components/chatWindow';
 import { InboxOutlined } from '@ant-design/icons';
 import eventEmitter from '../utils/eventEmitter';
+
+import { pdfjs } from 'react-pdf';
+import 'react-pdf/dist/Page/TextLayer.css';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
 const { Dragger } = Upload;
 
@@ -41,13 +46,23 @@ function addHighlightText(element: any) {
   newElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
-const Home: NextPage = () => {
-  const [file, setFile] = useState<File | string>('/github-privacy.pdf');
-  const disabledUpload = true;
+export default function ChatComponent () {
+  const [file, setFile] = useState<File | string>('');
+  const disabledUpload = false;
   const [numPages, setNumPages] = useState(null);
   const [loading, setLoading] = useState(false);
   const pdfRef = useRef<unknown>();
   const sentenceRef = useRef<string[]>();
+  const [containerRef, setContainerRef] = useState<HTMLElement | null>(null);
+  const [containerWidth, setContainerWidth] = useState<number>();
+
+  const onResize = useCallback<ResizeObserverCallback>((entries) => {
+    const [entry] = entries;
+
+    if (entry) {
+      setContainerWidth(entry.contentRect.width);
+    }
+  }, []);
 
   function scrollToPage(num: number) {
     // @ts-ignore
@@ -77,20 +92,26 @@ const Home: NextPage = () => {
     const { chunkList } = res.data;
     const chunkSize = 2; // 每组的元素个数
 
+    console.log(chunkList)
+;
     // 由于vercel单个接口10秒限制，所以分批次处理
     for (let i = 0; i < chunkList.length; i += chunkSize) {
-      const chunk = chunkList.slice(i, i + chunkSize); // 取出当前组的元素
+      try {
 
-      await axios('/api/embedding', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        data: {
-          sentenceList: chunk,
-          apiKey: JSON.parse(localStorage.getItem('settings') as string).apiKey
-        }
-      });
+        const chunk = chunkList.slice(i, i + chunkSize); // 取出当前组的元素
+        await axios('/api/embedding', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          data: {
+            sentenceList: chunk,
+          }
+        });
+      } catch (error) {
+        console.error(error);
+        break;
+      }
     }
     setLoading(false);
   }
@@ -141,16 +162,11 @@ const Home: NextPage = () => {
 
   return (
     <>
-      <Head>
-        <title>Chat With PDF</title>
-        <meta name="description" content="Chat With PDF" />
-        <link rel="icon" href="/favicon.ico" />
-      </Head>
-      <main className="bg-slate-100 py-4 h-screen">
+      <main className="bg-slate-100 py-4 h-auto">
         <div className="flex flex-row justify-center m-auto w-5/6 space-x-4">
           {!disabledUpload && (
             <Button disabled={!file} loading={loading} type="primary" onClick={onReading}>
-              start reading
+              Start reading
             </Button>
           )}
           {!disabledUpload && !file && (
@@ -171,8 +187,7 @@ const Home: NextPage = () => {
 
           <Card
             style={{ width: 700 }}
-            className="h-full overflow-auto scroll-smooth"
-            bodyStyle={{ padding: 0 }}
+            className="h-full overflow-auto max-h-screen max-w-auto scroll-smooth"
           >
             {/* @ts-ignore */}
             <Document ref={pdfRef} file={file} onLoadSuccess={onDocumentLoadSuccess}>
@@ -180,8 +195,7 @@ const Home: NextPage = () => {
                 <Page
                   key={`page_${index + 1}`}
                   pageNumber={index + 1}
-                  width={700}
-                  renderAnnotationLayer={false}
+                  width={containerWidth ? Math.min(containerWidth, 800) : 800}
                 />
               ))}
             </Document>
@@ -191,5 +205,3 @@ const Home: NextPage = () => {
     </>
   );
 };
-
-export default Home;

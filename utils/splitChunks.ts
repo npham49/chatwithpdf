@@ -1,7 +1,6 @@
-import { encode } from 'gpt-3-encoder';
-import { NextApiRequest, NextApiResponse } from 'next';
+import { encode } from 'gpt-tokenizer';
 
-function generateNewChunkList(chunkList: { sentence: string; pageNum: number }[]) {
+export function generateNewChunkList(chunkList: { sentence: string; pageNum: number }[]) {
   const combined = [];
   let currentString = '';
   let currentPageNum = 1;
@@ -33,17 +32,3 @@ function generateNewChunkList(chunkList: { sentence: string; pageNum: number }[]
 
   return combined;
 }
-
-const handler = async (req: NextApiRequest, res: NextApiResponse) => {
-  try {
-    const { sentenceList } = req.body;
-    const chunkList = generateNewChunkList(sentenceList);
-
-    res.status(200).json({ chunkList });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'error' });
-  }
-};
-
-export default handler;
